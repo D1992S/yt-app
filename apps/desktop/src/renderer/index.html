@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>InsightEngine Desktop</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script type="importmap">
+      {
+        "imports": {
+          "react": "https://esm.sh/react@18.2.0",
+          "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
+          "recharts": "https://esm.sh/recharts@2.12.0",
+          "@google/genai": "https://esm.sh/@google/genai@1.20.0",
+          "clsx": "https://esm.sh/clsx@2.1.0",
+          "tailwind-merge": "https://esm.sh/tailwind-merge@2.2.1",
+          "lucide-react": "https://esm.sh/lucide-react@0.330.0"
+        }
+      }
+    </script>
+    <style>
+      :root {
+        /* Premium Dark Theme Tokens (Zinc based) */
+        --bg: #09090b;
+        --panel: #18181b;
+        --panel2: #27272a;
+        --text: #f4f4f5;
+        --text-muted: #a1a1aa;
+        --border: #27272a;
+        --accent: #3b82f6; /* Blue-500 */
+        --accent-hover: #2563eb; /* Blue-600 */
+        --danger: #ef4444;
+        --success: #22c55e;
+        --warning: #f59e0b;
+      }
+
+      body {
+        background-color: var(--bg);
+        color: var(--text);
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        -webkit-font-smoothing: antialiased;
+        overflow-y: auto;
+      }
+
+      /* Custom Scrollbar */
+      ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+      }
+      ::-webkit-scrollbar-track {
+        background: var(--bg); 
+      }
+      ::-webkit-scrollbar-thumb {
+        background: var(--panel2); 
+        border-radius: 4px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: #3f3f46; 
+      }
+
+      /* Utility classes for theme */
+      .bg-app { background-color: var(--bg); }
+      .bg-panel { background-color: var(--panel); }
+      .bg-panel-2 { background-color: var(--panel2); }
+      .text-app { color: var(--text); }
+      .text-muted-app { color: var(--text-muted); }
+      .border-app { border-color: var(--border); }
+      
+      /* Focus Ring */
+      *:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
