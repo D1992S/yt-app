@@ -449,6 +449,21 @@ const MIGRATIONS: Migration[] = [
       CREATE INDEX IF NOT EXISTS idx_alerts_is_read ON alerts(is_read);
       CREATE INDEX IF NOT EXISTS idx_topic_mem_cluster_id ON topic_cluster_membership(cluster_id);
     `
+  },
+  {
+    id: 15,
+    name: 'llm_settings',
+    up: `
+      CREATE TABLE llm_settings (
+        profile_id INTEGER PRIMARY KEY,
+        provider TEXT NOT NULL,
+        model TEXT NOT NULL,
+        temperature REAL NOT NULL DEFAULT 0.3,
+        max_output_tokens INTEGER NOT NULL DEFAULT 1024,
+        updated_at TEXT NOT NULL,
+        FOREIGN KEY(profile_id) REFERENCES profiles(id)
+      );
+    `
   }
 ];
 
