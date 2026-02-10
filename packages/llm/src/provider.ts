@@ -1,5 +1,6 @@
 import OpenAI from 'openai';
 import { GoogleGenAI } from '@google/genai';
+import { LOCAL_STUB_LLM_RESPONSE, buildLocalStubText } from './stub';
 
 export type LLMProviderName = 'openai' | 'gemini';
 
@@ -19,6 +20,7 @@ export type GenerateTextInput = {
 export interface LLMProvider {
   generateText(input: Omit<GenerateTextInput, 'provider'>): Promise<string>;
 }
+
 
 export class OpenAIProvider implements LLMProvider {
   private client: OpenAI;
@@ -79,8 +81,8 @@ export class GeminiProvider implements LLMProvider {
 
 export class LocalStubProvider implements LLMProvider {
   async generateText(input: Omit<GenerateTextInput, 'provider'>): Promise<string> {
-    const prompt = input.messages.map((message) => message.content).join('\n');
-    return `[STUB] I received your prompt: "${prompt.substring(0, 50)}...". I am running in offline mode.`;
+    const userPrompt = input.messages.find((message) => message.role === 'user')?.content;
+    return buildLocalStubText(userPrompt);
   }
 }
 
