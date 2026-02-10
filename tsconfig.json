@@ -23,6 +23,6 @@
       "@insight/*": ["packages/*/src"]
     }
   },
-  "include": ["apps/**/*", "packages/**/*"],
+  "files": ["types.ts"],
   "exclude": ["node_modules", "dist", "**/*.spec.ts", "**/*.test.ts"]
 }
