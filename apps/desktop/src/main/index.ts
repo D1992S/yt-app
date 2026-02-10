@@ -5,7 +5,7 @@ import { initializePaths, initializeLogger, log, getAppPaths } from './fs-utils'
 import { initDb, closeDb, meta, TokenStore, SyncOrchestrator, perf, modelRegistry, repo, parseSrtToSegments, parseCsv, analyzeStyles, scoreIdea, checkRepetitionRisk, CoreDataExecutor, checkIntegrity } from '@insight/core';
 import { initApi, getApi } from '@insight/api';
 import { OpenAIProvider, GeminiProvider, LocalStubProvider, ProviderRegistry, LLMOrchestrator } from '@insight/llm';
-import { buildFakeLlmResponse } from './llm-fixtures';
+import { resolveLlmConfig, respondInFakeMode } from './llm-runtime';
 import { AuthManager } from './auth-flow';
 import { generateReport } from './report-service';
 import { createWeeklyPackage } from './export-service';
@@ -364,14 +364,17 @@ app.whenReady().then(() => {
       if (!request.question || request.question.length > 500) throw new AppError('VALIDATION_ERROR', "Invalid question");
 
       if (providerMode === 'fake') {
-        return buildFakeLlmResponse(request.question);
+        return respondInFakeMode(request.question);
       }
 
       const savedSettings = repo.getLlmSettings(request.profileId);
-      const provider = request.provider || savedSettings.provider;
-      const model = (request.model || '').trim() || savedSettings.model;
-      const plannerModel = model;
-      const summarizerModel = model;
+      const runtimeConfig = resolveLlmConfig({
+        providerMode,
+        request,
+        savedSettings,
+        hasOpenAiKey: Boolean(openAiKey),
+        hasGeminiKey: Boolean(geminiKey),
+      });
 
       const runtimeOrchestrator = new LLMOrchestrator(
         new ProviderRegistry({
@@ -379,7 +382,7 @@ app.whenReady().then(() => {
           gemini: geminiProvider || fallbackProvider,
         }),
         new CoreDataExecutor(),
-        { provider, plannerModel, summarizerModel }
+        runtimeConfig
       );
 
       return await runtimeOrchestrator.processMessage(request.question);

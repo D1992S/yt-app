@@ -210,3 +210,16 @@ Creates a portable executable in `dist/`.
 ```bash
 pnpm build:portable
 ```
+
+## Manualny plan testów (provider/model + restart + błędy)
+
+1. Uruchom aplikację w trybie real: `APP_PROVIDER=real pnpm dev`.
+2. Wejdź do panelu ustawień LLM i sprawdź aktualny provider/model.
+3. Zmień provider na **OpenAI**, ustaw model (np. `gpt-4o-mini`) i zapisz ustawienia.
+4. Wyślij pytanie przez panel asystenta i potwierdź, że odpowiedź wraca bez błędu.
+5. Przełącz provider na **Gemini**, ustaw model (np. `gemini-2.5-flash`) i ponownie zapisz.
+6. Wyślij kolejne pytanie; zweryfikuj, że odpowiedź działa także po zmianie providera/modelu.
+7. Zamknij aplikację całkowicie i uruchom ją ponownie.
+8. Otwórz ustawienia LLM i potwierdź, że ostatnio zapisany provider/model zostały zachowane po restarcie.
+9. Zasymuluj błąd klucza API (np. usuń `OPENAI_API_KEY` i wybierz OpenAI), potem spróbuj zapytać model — powinien pojawić się błąd walidacji konfiguracji.
+10. Uruchom tryb fake (`APP_PROVIDER=fake pnpm dev`) i sprawdź, że odpowiedź asystenta to stub deterministyczny bez użycia kluczy API.
