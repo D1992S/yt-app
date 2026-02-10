@@ -1,4 +1,3 @@
-
 /**
  * @license
  * Copyright 2025 Google LLC
@@ -6,293 +5,336 @@
  */
 import 'dotenv/config';
 import express from 'express';
-import { GoogleAuth } from 'google-auth-library';
-import fetch from 'node-fetch';
 
 const app = express();
-app.use(express.json({limit: process?.env?.API_PAYLOAD_MAX_SIZE || "7mb"}));
+app.use(express.json({ limit: process?.env?.API_PAYLOAD_MAX_SIZE || '7mb' }));
 
 // CORS: only allow requests from the local Electron app
 app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', 'http://localhost:5173');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-app-proxy');
   if (req.method === 'OPTIONS') return res.sendStatus(204);
   next();
 });
 
 const PORT = process?.env?.API_BACKEND_PORT || 5000;
-const API_BACKEND_HOST = process?.env?.API_BACKEND_HOST || "127.0.0.1";
-const GOOGLE_CLOUD_LOCATION = process?.env?.GOOGLE_CLOUD_LOCATION;
-const GOOGLE_CLOUD_PROJECT = process?.env?.GOOGLE_CLOUD_PROJECT;
+const API_BACKEND_HOST = process?.env?.API_BACKEND_HOST || '127.0.0.1';
 
-if (!GOOGLE_CLOUD_PROJECT || !GOOGLE_CLOUD_LOCATION) {
-  console.error("Error: Environment variables GOOGLE_CLOUD_PROJECT and GOOGLE_CLOUD_LOCATION must be set.");
-  process.exit(1);
-}
+const SUPPORTED_PROVIDERS = new Set(['openai', 'anthropic', 'google']);
+const REQUEST_TIMEOUT_MIN_MS = 1000;
+const REQUEST_TIMEOUT_MAX_MS = 120000;
+const RATE_LIMIT_MIN_RPM = 1;
+const RATE_LIMIT_MAX_RPM = 2000;
 
-const API_CLIENT_MAP = [
- {
-    name: "VertexGenAi:generateContent",
-    patternForProxy: "https://aiplatform.googleapis.com/{{version}}/publishers/google/models/{{model}}:generateContent",
-    getApiEndpoint: (context, params) => {
-      return `https://aiplatform.clients6.google.com/${params['version']}/projects/${context.projectId}/locations/${context.region}/publishers/google/models/${params['model']}:generateContent`;
-    },
-    isStreaming: false,
-    transformFn: null,
-  },
- {
-    name: "VertexGenAi:predict",
-    patternForProxy: "https://aiplatform.googleapis.com/{{version}}/publishers/google/models/{{model}}:predict",
-    getApiEndpoint: (context, params) => {
-      return `https://aiplatform.clients6.google.com/${params['version']}/projects/${context.projectId}/locations/${context.region}/publishers/google/models/${params['model']}:predict`;
-    },
-    isStreaming: false,
-    transformFn: null,
-  },
- {
-    name: "VertexGenAi:streamGenerateContent",
-    patternForProxy: "https://aiplatform.googleapis.com/{{version}}/publishers/google/models/{{model}}:streamGenerateContent",
-    getApiEndpoint: (context, params) => {
-      return `https://aiplatform.clients6.google.com/${params['version']}/projects/${context.projectId}/locations/${context.region}/publishers/google/models/${params['model']}:streamGenerateContent`;
-    },
-    isStreaming: true,
-    transformFn: (response) => {
-        let normalizedResponse = response.trim();
-        while (normalizedResponse.startsWith(',') || normalizedResponse.startsWith('[')) {
-          normalizedResponse = normalizedResponse.substring(1).trim();
-        }
-        while (normalizedResponse.endsWith(',') || normalizedResponse.endsWith(']')) {
-          normalizedResponse = normalizedResponse.substring(0, normalizedResponse.length - 1).trim();
-        }
+const llmSettings = {
+  provider: process?.env?.LLM_PROVIDER || '',
+  model: process?.env?.LLM_MODEL || '',
+  apiKey: process?.env?.LLM_API_KEY || '',
+  rateLimitPerMinute: Number.parseInt(process?.env?.LLM_RATE_LIMIT_PER_MINUTE || '60', 10),
+  timeoutMs: Number.parseInt(process?.env?.LLM_TIMEOUT_MS || '30000', 10),
+};
 
-        if (!normalizedResponse.length) {
-          return {result: null, inProgress: false};
-        }
+const rateLimitBuckets = new Map();
 
-        if (!normalizedResponse.endsWith('}')) {
-          return {result: normalizedResponse, inProgress: true};
-        }
-
-        try {
-          const parsedResponse = JSON.parse(`${normalizedResponse}`);
-          const transformedResponse = `data: ${JSON.stringify(parsedResponse)}\n\n`;
-          return {result: transformedResponse, inProgress: false};
-        } catch (error) {
-          throw new Error(`Failed to parse response: ${error}.`);
-        }
-    },
-  },
- {
-    name: "ReasoningEngine:query",
-    patternForProxy: "https://{{endpoint_location}}-aiplatform.googleapis.com/{{version}}/projects/{{project_id}}/locations/{{location_id}}/reasoningEngines/{{engine_id}}:query",
-    getApiEndpoint: (context, params) => {
-      return `https://${params['endpoint_location']}-aiplatform.clients6.google.com/v1beta1/projects/${params['project_id']}/locations/${params['location_id']}/reasoningEngines/${params['engine_id']}:query`;
-    },
-    isStreaming: false,
-    transformFn: null,
-  },
- {
-    name: "ReasoningEngine:streamQuery",
-    patternForProxy: "https://{{endpoint_location}}-aiplatform.googleapis.com/{{version}}/projects/{{project_id}}/locations/{{location_id}}/reasoningEngines/{{engine_id}}:streamQuery",
-    getApiEndpoint: (context, params) => {
-      return `https://${params['endpoint_location']}-aiplatform.clients6.google.com/v1beta1/projects/${params['project_id']}/locations/${params['location_id']}/reasoningEngines/${params['engine_id']}:streamQuery`;
-    },
-    isStreaming: true,
-    transformFn: null,
-  },
-].map((client) => ({ ...client, patternInfo: parsePattern(client.patternForProxy) }));
-
-// Uses Google Application Default Credentials (ADC).
-// Users need to run "gcloud auth application-default login" in order to use the proxy.
-const auth = new GoogleAuth({
-  scopes: ['https://www.googleapis.com/auth/cloud-platform'],
-});
-
-function escapeRegex(str) {
-  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-function parsePattern(pattern) {
-  const paramRegex = /\{\{(.*?)\}\}/g;
-  const params = [];
-  const parts = [];
-  let lastIndex = 0;
-  let match;
-
-  while ((match = paramRegex.exec(pattern)) !== null) {
-    params.push(match[1]);
-    const literalPart = pattern.substring(lastIndex, match.index);
-    parts.push(escapeRegex(literalPart));
-    parts.push(`(?<${match[1]}>[^/]+)`);
-    lastIndex = paramRegex.lastIndex;
-  }
-  parts.push(escapeRegex(pattern.substring(lastIndex)));
-  const regexString = parts.join('');
-
-  return {regex: new RegExp(`^${regexString}$`), params};
-}
-
-function extractParams(patternInfo, url) {
-  const match = url.match(patternInfo.regex);
-  if (!match) return null;
-  const params = {};
-  patternInfo.params.forEach((paramName, index) => {
-    params[paramName] = match[index + 1];
-  });
-  return params;
-}
-
-async function getAccessToken(res) {
-  try {
-    const authClient = await auth.getClient();
-    const token = await authClient.getAccessToken();
-    return token.token;
-  } catch (error) {
-    console.error('[Node Proxy] Authentication error:', error);
-    if (error.code === 'ERR_GCLOUD_NOT_LOGGED_IN' || (error.message && error.message.includes('Could not load the default credentials'))) {
-      res.status(401).json({
-        error: 'Authentication Required',
-        message: 'Google Cloud Application Default Credentials not found or invalid. Please run "gcloud auth application-default login" and try again.',
-      });
-    } else {
-      res.status(500).json({ error: `Authentication failed: ${error.message}` });
-    }
-    return null;
-  }
-}
-
-function getRequestHeaders(accessToken) {
+function sanitizeSettings(settings) {
   return {
-    'Authorization': `Bearer ${accessToken}`,
-    'X-Goog-User-Project': GOOGLE_CLOUD_PROJECT,
-    'Content-Type': 'application/json',
+    provider: settings.provider,
+    model: settings.model,
+    apiKeyConfigured: Boolean(settings.apiKey),
+    rateLimitPerMinute: settings.rateLimitPerMinute,
+    timeoutMs: settings.timeoutMs,
   };
 }
 
-// --- Proxy Endpoint ---
-app.post('/api-proxy', async (req, res) => {
-  // Check for the custom header added by the shim
-  if (req.headers['x-app-proxy'] !== 'local-vertex-ai-app') {
-    return res.status(403).send('Forbidden: Request must originate from the local Vertex App shim.');
+function makeError(field, message) {
+  return { field, message };
+}
+
+function normalizeProvider(provider) {
+  return typeof provider === 'string' ? provider.trim().toLowerCase() : provider;
+}
+
+function validateSettingsPayload(payload) {
+  const errors = [];
+
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    return [makeError('payload', 'Payload must be a JSON object.')];
   }
 
-  const { originalUrl, method, headers, body } = req.body;
-  if (!originalUrl) {
-    return res.status(400).send('Bad Request: originalUrl is required.');
+  const provider = normalizeProvider(payload.provider);
+  if (typeof provider !== 'string' || !provider.length) {
+    errors.push(makeError('provider', 'Provider is required.'));
+  } else if (!SUPPORTED_PROVIDERS.has(provider)) {
+    errors.push(makeError('provider', `Unsupported provider. Allowed: ${Array.from(SUPPORTED_PROVIDERS).join(', ')}.`));
   }
 
-  // 1. Find the matching API client
-  const apiClient = API_CLIENT_MAP.find(p => {
-    // We store extractedParams on req for use later if needed, though getVertexUrl takes it as arg.
-    req.extractedParams = extractParams(p.patternInfo, originalUrl);
-    return req.extractedParams !== null;
-  });
-
-  if (!apiClient) {
-    console.error(`[Node Proxy] No API client handler found for URL: ${originalUrl}`);
-    return res.status(404).json({ error: `No proxy handler found for URL: ${originalUrl}` });
+  if (typeof payload.model !== 'string' || !payload.model.trim().length) {
+    errors.push(makeError('model', 'Model is required.'));
   }
 
-  const extractedParams = req.extractedParams;
-  console.log(`[Node Proxy] Matched API client: ${apiClient.name}`);
+  if (typeof payload.apiKey !== 'string' || !payload.apiKey.trim().length) {
+    errors.push(makeError('key', 'API key is required.'));
+  }
+
+  if (!Number.isInteger(payload.rateLimitPerMinute)) {
+    errors.push(makeError('rate-limit', 'rateLimitPerMinute must be an integer.'));
+  } else if (payload.rateLimitPerMinute < RATE_LIMIT_MIN_RPM || payload.rateLimitPerMinute > RATE_LIMIT_MAX_RPM) {
+    errors.push(
+      makeError('rate-limit', `rateLimitPerMinute must be between ${RATE_LIMIT_MIN_RPM} and ${RATE_LIMIT_MAX_RPM}.`),
+    );
+  }
+
+  if (!Number.isInteger(payload.timeoutMs)) {
+    errors.push(makeError('timeout', 'timeoutMs must be an integer.'));
+  } else if (payload.timeoutMs < REQUEST_TIMEOUT_MIN_MS || payload.timeoutMs > REQUEST_TIMEOUT_MAX_MS) {
+    errors.push(makeError('timeout', `timeoutMs must be between ${REQUEST_TIMEOUT_MIN_MS} and ${REQUEST_TIMEOUT_MAX_MS}.`));
+  }
+
+  return errors;
+}
+
+function validateGeneratePayload(payload) {
+  const errors = [];
+
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    return [makeError('payload', 'Payload must be a JSON object.')];
+  }
+
+  const effectiveProvider = normalizeProvider(payload.provider || llmSettings.provider);
+  const effectiveModel = typeof payload.model === 'string' && payload.model.trim().length ? payload.model.trim() : llmSettings.model;
+  const effectiveApiKey = typeof payload.apiKey === 'string' && payload.apiKey.trim().length ? payload.apiKey.trim() : llmSettings.apiKey;
+  const effectiveRateLimit = payload.rateLimitPerMinute ?? llmSettings.rateLimitPerMinute;
+  const effectiveTimeout = payload.timeoutMs ?? llmSettings.timeoutMs;
+
+  if (!effectiveProvider) {
+    errors.push(makeError('provider', 'Provider is required (in payload or via /api/settings/llm).'));
+  } else if (!SUPPORTED_PROVIDERS.has(effectiveProvider)) {
+    errors.push(makeError('provider', `Unsupported provider. Allowed: ${Array.from(SUPPORTED_PROVIDERS).join(', ')}.`));
+  }
+
+  if (!effectiveModel) {
+    errors.push(makeError('model', 'Model is required (in payload or via /api/settings/llm).'));
+  }
+
+  if (!effectiveApiKey) {
+    errors.push(makeError('key', 'API key is required (in payload or via /api/settings/llm).'));
+  }
+
+  if (!Number.isInteger(effectiveRateLimit)) {
+    errors.push(makeError('rate-limit', 'rateLimitPerMinute must be an integer.'));
+  } else if (effectiveRateLimit < RATE_LIMIT_MIN_RPM || effectiveRateLimit > RATE_LIMIT_MAX_RPM) {
+    errors.push(
+      makeError('rate-limit', `rateLimitPerMinute must be between ${RATE_LIMIT_MIN_RPM} and ${RATE_LIMIT_MAX_RPM}.`),
+    );
+  }
+
+  if (!Number.isInteger(effectiveTimeout)) {
+    errors.push(makeError('timeout', 'timeoutMs must be an integer.'));
+  } else if (effectiveTimeout < REQUEST_TIMEOUT_MIN_MS || effectiveTimeout > REQUEST_TIMEOUT_MAX_MS) {
+    errors.push(makeError('timeout', `timeoutMs must be between ${REQUEST_TIMEOUT_MIN_MS} and ${REQUEST_TIMEOUT_MAX_MS}.`));
+  }
+
+  const hasPrompt = typeof payload.prompt === 'string' && payload.prompt.trim().length > 0;
+  const hasMessages = Array.isArray(payload.messages) && payload.messages.length > 0;
+  if (!hasPrompt && !hasMessages) {
+    errors.push(makeError('payload', 'Either a non-empty prompt or messages array is required.'));
+  }
+
+  return {
+    errors,
+    effective: {
+      provider: effectiveProvider,
+      model: effectiveModel,
+      apiKey: effectiveApiKey,
+      rateLimitPerMinute: effectiveRateLimit,
+      timeoutMs: effectiveTimeout,
+    },
+  };
+}
+
+function applyRateLimit(limitKey, rateLimitPerMinute) {
+  const now = Date.now();
+  const windowStart = now - 60000;
+  const entries = rateLimitBuckets.get(limitKey) || [];
+  const recentEntries = entries.filter((entry) => entry > windowStart);
+
+  if (recentEntries.length >= rateLimitPerMinute) {
+    const oldestWithinWindow = recentEntries[0];
+    const retryAfterMs = Math.max(1000, 60000 - (now - oldestWithinWindow));
+    return { allowed: false, retryAfterMs };
+  }
+
+  recentEntries.push(now);
+  rateLimitBuckets.set(limitKey, recentEntries);
+  return { allowed: true, retryAfterMs: 0 };
+}
+
+function withTimeout(timeoutMs) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  return {
+    signal: controller.signal,
+    cleanup: () => clearTimeout(timeout),
+  };
+}
+
+function toOpenAiMessages(payload) {
+  if (Array.isArray(payload.messages) && payload.messages.length) {
+    return payload.messages;
+  }
+  return [{ role: 'user', content: String(payload.prompt || '') }];
+}
+
+async function callProvider(effective, payload) {
+  const { provider, model, apiKey, timeoutMs } = effective;
+  const timeout = withTimeout(timeoutMs);
+
   try {
-    // 2. Get authenticated access token
-    const accessToken = await getAccessToken(res);
-    if (!accessToken) return;
-
-    // 3. Construct the full API URL using env-set GOOGLE_CLOUD_PROJECT/LOCATION and extracted params
-    const context = {projectId: GOOGLE_CLOUD_PROJECT, region: GOOGLE_CLOUD_LOCATION};
-    const apiUrl = apiClient.getApiEndpoint(context, extractedParams);
-    console.log(`[Node Proxy] Forwarding to Vertex API: ${apiUrl}`);
-
-    // 4. Prepare headers for the API call
-    const apiHeaders = getRequestHeaders(accessToken);
-
-    const apiFetchOptions = {
-      method: method || 'POST',
-      headers: {...apiHeaders, ...headers},
-      body: body ? body : undefined,
-    };
-
-    // 5. Make the call to the API
-    const apiResponse = await fetch(apiUrl, apiFetchOptions);
-
-    // 6. Respond to the client based on stream type
-    if (apiClient.isStreaming) {
-      console.log(`[Node Proxy] Sending STREAMING response for ${apiClient.name}`);
-      // Set headers for a streaming JSON response
-      res.writeHead(apiResponse.status, {
-        'Content-Type': 'text/event-stream',
-        'Transfer-Encoding': 'chunked',
-        'Connection': 'keep-alive',
+    if (provider === 'openai') {
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model,
+          messages: toOpenAiMessages(payload),
+          temperature: payload.temperature,
+          max_tokens: payload.maxTokens,
+        }),
+        signal: timeout.signal,
       });
-      // Immediately send headers
-      res.flushHeaders();
 
-      if (!apiResponse.body) {
-        console.error('[Node Proxy] Streaming response has no body.');
-        return res.end(JSON.stringify({ error: 'Streaming response body is null' }));
+      const data = await response.json();
+      if (!response.ok) {
+        return { status: response.status, data: { error: 'Provider request failed', provider, details: data } };
       }
-
-      const decoder = new TextDecoder();
-      let deltaChunk = '';
-      apiResponse.body.on('data', (encodedChunk) => {
-        if (res.writableEnded) return; // Prevent writing after res.end()
-
-        try {
-          if (!apiClient.transformFn) {
-            res.write(encodedChunk);
-          } else {
-            const decodedChunk = decoder.decode(encodedChunk, { stream: true });
-            deltaChunk = deltaChunk + decodedChunk;
-
-            const {result, inProgress} = apiClient.transformFn(deltaChunk);
-            if (result && !inProgress) {
-              deltaChunk = '';
-              res.write(new TextEncoder().encode(result));
-            }
-          }
-        } catch (error) {
-          console.error(`[Node Proxy] Error processing streaming response for ${apiClient.name}`);
-          console.error(error);
-        }
-      });
-
-      apiResponse.body.on('end', () => {
-        deltaChunk = '';
-        console.log(`[Node Proxy] Vertex stream finished and all data processed for ${apiClient.name}`);
-        res.end();
-      });
-
-      apiResponse.body.on('error', (streamError) => {
-        console.error('[Node Proxy] Error from Vertex stream:', streamError);
-        if (!res.writableEnded) {
-          res.end(JSON.stringify({ proxyError: 'Stream error from Vertex AI', details: streamError.message }));
-        }
-      });
-
-      res.on('error', (resError) => {
-        console.error('[Node Proxy] Error writing to client response:', resError);
-        // The source stream might need to be destroyed if an error occurs here.
-        if (apiResponse.body && typeof apiResponse.body.destroy === 'function') {
-             apiResponse.body.destroy(resError);
-        }
-      });
-    } else {
-      // Non-streaming response handling
-      console.log(`[Node Proxy] Sending JSON response for ${apiClient.name}`);
-      const data = await apiResponse.json();
-      res.status(apiResponse.status).json(data);
+      return { status: 200, data };
     }
+
+    if (provider === 'anthropic') {
+      const response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model,
+          messages: toOpenAiMessages(payload),
+          max_tokens: payload.maxTokens || 1024,
+          temperature: payload.temperature,
+        }),
+        signal: timeout.signal,
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        return { status: response.status, data: { error: 'Provider request failed', provider, details: data } };
+      }
+      return { status: 200, data };
+    }
+
+    if (provider === 'google') {
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            contents: [
+              {
+                role: 'user',
+                parts: [{ text: payload.prompt || JSON.stringify(payload.messages || []) }],
+              },
+            ],
+            generationConfig: {
+              temperature: payload.temperature,
+              maxOutputTokens: payload.maxTokens,
+            },
+          }),
+          signal: timeout.signal,
+        },
+      );
+
+      const data = await response.json();
+      if (!response.ok) {
+        return { status: response.status, data: { error: 'Provider request failed', provider, details: data } };
+      }
+      return { status: 200, data };
+    }
+
+    return { status: 400, data: { error: `Unsupported provider: ${provider}` } };
   } catch (error) {
-    console.error(`[Node Proxy] Error proxying request for ${apiClient.name}`);
-    console.error(error)
-    res.status(500).json({ error: error instanceof Error ? error.message : 'Internal proxy error' });
+    if (error.name === 'AbortError') {
+      return {
+        status: 504,
+        data: {
+          error: 'Provider timeout',
+          message: `Provider request exceeded timeoutMs=${timeoutMs}.`,
+        },
+      };
+    }
+
+    return {
+      status: 502,
+      data: {
+        error: 'Provider communication error',
+        message: error instanceof Error ? error.message : 'Unknown provider error',
+      },
+    };
+  } finally {
+    timeout.cleanup();
   }
+}
+
+app.get('/api/settings/llm', (req, res) => {
+  res.status(200).json({ data: sanitizeSettings(llmSettings) });
+});
+
+app.post('/api/settings/llm', (req, res) => {
+  const errors = validateSettingsPayload(req.body);
+  if (errors.length) {
+    return res.status(400).json({ error: 'Invalid settings payload', details: errors });
+  }
+
+  llmSettings.provider = normalizeProvider(req.body.provider);
+  llmSettings.model = req.body.model.trim();
+  llmSettings.apiKey = req.body.apiKey.trim();
+  llmSettings.rateLimitPerMinute = req.body.rateLimitPerMinute;
+  llmSettings.timeoutMs = req.body.timeoutMs;
+
+  return res.status(200).json({
+    message: 'LLM settings updated.',
+    data: sanitizeSettings(llmSettings),
+  });
+});
+
+app.post('/api/llm/generate', async (req, res) => {
+  const { errors, effective } = validateGeneratePayload(req.body);
+  if (errors.length) {
+    return res.status(400).json({ error: 'Invalid generate payload', details: errors });
+  }
+
+  const limitKey = `${effective.provider}:${effective.model}`;
+  const rateLimitResult = applyRateLimit(limitKey, effective.rateLimitPerMinute);
+  if (!rateLimitResult.allowed) {
+    return res.status(429).json({
+      error: 'Rate limit exceeded',
+      details: [makeError('rate-limit', `Too many requests. Retry in ${rateLimitResult.retryAfterMs}ms.`)],
+      retryAfterMs: rateLimitResult.retryAfterMs,
+    });
+  }
+
+  const providerResponse = await callProvider(effective, req.body);
+  return res.status(providerResponse.status).json(providerResponse.data);
 });
 
 app.listen(PORT, API_BACKEND_HOST, () => {
-  console.log(`Vertex AI Backend listening at http://localhost:${PORT}`);
+  console.log(`LLM Backend listening at http://localhost:${PORT}`);
 });
-
