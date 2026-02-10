@@ -100,6 +100,9 @@ importers:
       '@types/react-dom':
         specifier: ^18.2.0
         version: 18.3.7(@types/react@18.3.28)
+      '@vitejs/plugin-react':
+        specifier: ^5.1.3
+        version: 5.1.3(vite@5.4.21(@types/node@25.2.2))
       autoprefixer:
         specifier: ^10.4.17
         version: 10.4.24(postcss@8.5.6)
@@ -143,6 +146,15 @@ importers:
 
   packages/core:
     dependencies:
+      '@insight/api':
+        specifier: workspace:*
+        version: link:../api
+      '@insight/llm':
+        specifier: workspace:*
+        version: link:../llm
+      '@insight/ml':
+        specifier: workspace:*
+        version: link:../ml
       '@insight/shared':
         specifier: workspace:*
         version: link:../shared
@@ -3958,6 +3970,18 @@ snapshots:
     dependencies:
       '@types/node': 25.2.2
     optional: true
+
+  '@vitejs/plugin-react@5.1.3(vite@5.4.21(@types/node@25.2.2))':
+    dependencies:
+      '@babel/core': 7.29.0
+      '@babel/plugin-transform-react-jsx-self': 7.27.1(@babel/core@7.29.0)
+      '@babel/plugin-transform-react-jsx-source': 7.27.1(@babel/core@7.29.0)
+      '@rolldown/pluginutils': 1.0.0-rc.2
+      '@types/babel__core': 7.20.5
+      react-refresh: 0.18.0
+      vite: 5.4.21(@types/node@25.2.2)
+    transitivePeerDependencies:
+      - supports-color
 
   '@vitejs/plugin-react@5.1.3(vite@7.3.1(@types/node@25.2.2)(jiti@1.21.7))':
     dependencies:

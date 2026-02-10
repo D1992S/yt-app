@@ -21,7 +21,9 @@ contextBridge.exposeInMainWorld('electron', {
     generate: (range: Range, mode: ReportMode) => ipcRenderer.invoke('report:generate', { range, mode })
   },
   analytics: {
-    getReportData: (range: Range) => ipcRenderer.invoke('analytics:getReportData', range)
+    getReportData: (range: Range) => ipcRenderer.invoke('analytics:getReportData', range),
+    calculateMetrics: (data: any[]) => ipcRenderer.invoke('analytics:calculateMetrics', data),
+    generateInsights: (metrics: any, range: Range) => ipcRenderer.invoke('analytics:generateInsights', { metrics, range }),
   },
   perf: {
     getStats: () => ipcRenderer.invoke('perf:stats')

@@ -24,8 +24,6 @@ import { ReportConfig } from './components/ReportConfig';
 import { ReportView } from './components/ReportView';
 import { LlmSettingsPanel, LlmSettingsFormState } from './components/LlmSettingsPanel';
 import { Button, Card } from './components/ui/DesignSystem';
-import { calculateMetrics } from '@insight/core';
-import { generateInsights } from '@insight/llm';
 
 const DEFAULT_LLM_SETTINGS: LlmSettingsFormState = {
   provider: 'gemini',
@@ -189,10 +187,10 @@ const App: React.FC = () => {
         preset: state.currentRange.preset
       });
       
-      const metrics = calculateMetrics(data);
+      const metrics = await window.electron.analytics.calculateMetrics(data);
       let insights = '';
       if (state.currentMode !== 'FAST') {
-        insights = await generateInsights(metrics, state.currentRange);
+        insights = await window.electron.analytics.generateInsights(metrics, state.currentRange);
       }
 
       const report: ReportData = {

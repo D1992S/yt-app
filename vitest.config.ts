@@ -9,8 +9,11 @@ export default defineConfig({
     alias: {
       '@': path.resolve(__dirname, '.'),
       '@insight/shared': path.resolve(__dirname, 'packages/shared/src'),
+      '@insight/core': path.resolve(__dirname, 'packages/core/src'),
+      '@insight/api': path.resolve(__dirname, 'packages/api/src'),
       '@insight/ml': path.resolve(__dirname, 'packages/ml/src'),
       '@insight/llm': path.resolve(__dirname, 'packages/llm/src'),
+      '@insight/reports': path.resolve(__dirname, 'packages/reports/src'),
     },
   },
   test: {

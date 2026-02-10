@@ -4,12 +4,12 @@ import os from 'os';
 import { initializePaths, initializeLogger, log, getAppPaths } from './fs-utils';
 import { initDb, closeDb, meta, TokenStore, SyncOrchestrator, perf, modelRegistry, repo, parseSrtToSegments, parseCsv, analyzeStyles, scoreIdea, checkRepetitionRisk, CoreDataExecutor, checkIntegrity } from '@insight/core';
 import { initApi, getApi } from '@insight/api';
-import { OpenAIProvider, GeminiProvider, LocalStubProvider, ProviderRegistry, LLMOrchestrator } from '@insight/llm';
+import { OpenAIProvider, GeminiProvider, LocalStubProvider, ProviderRegistry, LLMOrchestrator, generateInsights } from '@insight/llm';
 import { resolveLlmConfig, respondInFakeMode } from './llm-runtime';
 import { AuthManager } from './auth-flow';
 import { generateReport } from './report-service';
 import { createWeeklyPackage } from './export-service';
-import { formatDateISO, DateRangeSchema, GenerateReportSchema, ProfileCreateSchema, TranscriptSaveSchema, ImportCsvSchema, SearchQuerySchema, AppError } from '@insight/shared';
+import { formatDateISO, DateRangeSchema, GenerateReportSchema, ProfileCreateSchema, TranscriptSaveSchema, ImportCsvSchema, SearchQuerySchema, AppError, calculateMetrics } from '@insight/shared';
 
 // Disable GPU Acceleration for Windows 7
 if (os.release().startsWith('6.1')) app.disableHardwareAcceleration();
@@ -228,6 +228,15 @@ app.whenReady().then(() => {
         value: s.views,
         category: 'Views'
       }));
+    });
+
+    handle('analytics:calculateMetrics', async (_event, data) => {
+      return calculateMetrics(data);
+    });
+
+    handle('analytics:generateInsights', async (_event, { metrics, range }) => {
+      const validatedRange = DateRangeSchema.parse(range);
+      return await generateInsights(metrics, validatedRange);
     });
 
     handle('perf:stats', async () => perf.getStats());

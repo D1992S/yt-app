@@ -5,6 +5,9 @@
   "types": "src/index.ts",
   "dependencies": {
     "@insight/shared": "workspace:*",
+    "@insight/api": "workspace:*",
+    "@insight/llm": "workspace:*",
+    "@insight/ml": "workspace:*",
     "better-sqlite3": "^9.4.0"
   },
   "devDependencies": {
