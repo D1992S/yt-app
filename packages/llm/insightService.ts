@@ -1,7 +1,6 @@
-import { GoogleGenAI } from '@google/genai';
+import { GeminiProvider, ProviderRegistry, generateText } from './src/provider';
 import { MetricResult, DateRange } from '../../types';
 
-// Guardrails: Evidence Mode
 const SYSTEM_INSTRUCTION = `
 You are a strict data analyst for a business report. 
 Your job is to interpret the provided metrics.
@@ -13,20 +12,22 @@ RULES:
 5. Output format: HTML paragraphs (<p>).
 `;
 
+const INSIGHTS_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+
 export const generateInsights = async (
   metrics: MetricResult,
   range: DateRange
 ): Promise<string> => {
-  const apiKey = process.env.API_KEY;
-  
+  const apiKey = process.env.GEMINI_API_KEY;
+
   if (!apiKey) {
-    console.warn("No API Key found. Skipping LLM insights.");
-    return "<p><em>LLM Insights unavailable (Missing API Key). Showing raw metrics only.</em></p>";
+    console.warn('No GEMINI_API_KEY found. Skipping LLM insights.');
+    return '<p><em>LLM Insights unavailable (Missing GEMINI_API_KEY). Showing raw metrics only.</em></p>';
   }
 
   try {
-    const ai = new GoogleGenAI({ apiKey, vertexai: true });
-    
+    const registry = new ProviderRegistry({ gemini: new GeminiProvider(apiKey) });
+
     const prompt = `
       Analyze the following report data:
       Date Range: ${range.start.toLocaleDateString()} to ${range.end.toLocaleDateString()}
@@ -42,21 +43,22 @@ export const generateInsights = async (
       Provide a summary of performance and 2 key takeaways.
     `;
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: {
-        role: 'user',
-        parts: [{ text: prompt }]
+    const responseText = await generateText(
+      {
+        provider: 'gemini',
+        model: INSIGHTS_MODEL,
+        messages: [
+          { role: 'system', content: SYSTEM_INSTRUCTION },
+          { role: 'user', content: prompt },
+        ],
+        temperature: 0.2,
       },
-      config: {
-        systemInstruction: SYSTEM_INSTRUCTION,
-        temperature: 0.2, // Low temperature for deterministic/factual output
-      }
-    });
+      registry
+    );
 
-    return response.text || "<p>No insights generated.</p>";
+    return responseText || '<p>No insights generated.</p>';
   } catch (error) {
-    console.error("LLM Generation Error:", error);
+    console.error('LLM Generation Error:', error);
     return `<p class="text-red-500">Error generating insights: ${(error as Error).message}</p>`;
   }
 };

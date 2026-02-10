@@ -4,7 +4,7 @@ import os from 'os';
 import { initializePaths, initializeLogger, log, getAppPaths } from './fs-utils';
 import { initDb, closeDb, meta, TokenStore, SyncOrchestrator, perf, modelRegistry, repo, parseSrtToSegments, parseCsv, analyzeStyles, scoreIdea, checkRepetitionRisk, CoreDataExecutor, checkIntegrity } from '@insight/core';
 import { initApi, getApi } from '@insight/api';
-import { GoogleGenAIProvider, LocalStubProvider, LLMOrchestrator } from '@insight/llm';
+import { OpenAIProvider, GeminiProvider, LocalStubProvider, ProviderRegistry, LLMOrchestrator } from '@insight/llm';
 import { AuthManager } from './auth-flow';
 import { generateReport } from './report-service';
 import { createWeeklyPackage } from './export-service';
@@ -108,11 +108,31 @@ app.whenReady().then(() => {
       }
     });
 
-    const apiKey = process.env.API_KEY;
-    const llmProvider = apiKey ? new GoogleGenAIProvider(apiKey) : new LocalStubProvider();
+    const openAiKey = process.env.OPENAI_API_KEY;
+    const geminiKey = process.env.GEMINI_API_KEY;
+    const llmProvider = openAiKey
+      ? new OpenAIProvider(openAiKey)
+      : geminiKey
+        ? new GeminiProvider(geminiKey)
+        : new LocalStubProvider();
+    const llmProviderName = openAiKey ? 'openai' : 'gemini';
+    const llmModel = openAiKey
+      ? (process.env.OPENAI_MODEL || 'gpt-4o-mini')
+      : (process.env.GEMINI_MODEL || 'gemini-2.5-flash');
     const dataExecutor = new CoreDataExecutor();
-    llmOrchestrator = new LLMOrchestrator(llmProvider, dataExecutor);
-    log(`LLM initialized (Provider: ${apiKey ? 'Google Vertex AI' : 'Local Stub'})`);
+    llmOrchestrator = new LLMOrchestrator(
+      new ProviderRegistry({
+        openai: llmProvider,
+        gemini: llmProvider,
+      }),
+      dataExecutor,
+      {
+        provider: llmProviderName,
+        plannerModel: llmModel,
+        summarizerModel: llmModel,
+      }
+    );
+    log(`LLM initialized (Provider: ${openAiKey ? 'OpenAI' : geminiKey ? 'Gemini' : 'Local Stub'})`);
 
     createWindow();
 
