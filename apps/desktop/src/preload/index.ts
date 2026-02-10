@@ -58,7 +58,9 @@ contextBridge.exposeInMainWorld('electron', {
     history: () => ipcRenderer.invoke('export:history')
   },
   llm: {
-    ask: (question: string) => ipcRenderer.invoke('llm:ask', question)
+    ask: (payload: string | { question: string; provider?: 'openai' | 'gemini'; model?: string; temperature?: number; maxOutputTokens?: number; profileId?: number }) => ipcRenderer.invoke('llm:ask', payload),
+    getSettings: (profileId?: number) => ipcRenderer.invoke('llm:settings:get', profileId),
+    saveSettings: (payload: { provider?: 'openai' | 'gemini'; model?: string; temperature?: number; maxOutputTokens?: number; profileId?: number }) => ipcRenderer.invoke('llm:settings:save', payload)
   },
   recovery: {
     run: (action: string) => ipcRenderer.invoke('recovery:run', action)

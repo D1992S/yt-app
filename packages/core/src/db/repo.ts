@@ -19,6 +19,21 @@ interface DbAlert { severity: string; message: string; entity_id?: string; actio
 interface DbGrowthCurve { cluster_id: number; duration_bucket: string; day_number: number; median_pct: number; p25_pct: number; p75_pct: number; }
 interface DbModel { model_id: string; type: string; version: string; trained_at: string; metrics_json: string; is_active: number; }
 
+export interface DbLlmSettings {
+  provider: 'openai' | 'gemini';
+  model: string;
+  temperature: number;
+  maxOutputTokens: number;
+  updatedAt?: string;
+}
+
+const DEFAULT_LLM_SETTINGS: DbLlmSettings = {
+  provider: 'gemini',
+  model: 'gemini-2.5-flash',
+  temperature: 0.3,
+  maxOutputTokens: 1024,
+};
+
 // --- Helper for Deduplication ---
 const runUpsert = (sql: string, params: Record<string, unknown>) => {
   const db = getDb();
@@ -677,6 +692,67 @@ export const repo = {
         tokens_used = tokens_used + excluded.tokens_used,
         cost_estimate = cost_estimate + excluded.cost_estimate
     `, { day, tokens, cost });
+  },
+
+  getLlmSettings: (profileId?: number): DbLlmSettings => {
+    const db = getDb();
+    const normalizedProfileId = profileId && profileId > 0 ? profileId : 0;
+    const row = db.prepare(`
+      SELECT provider, model, temperature, max_output_tokens, updated_at
+      FROM llm_settings
+      WHERE profile_id = ?
+    `).get(normalizedProfileId) as {
+      provider?: string;
+      model?: string;
+      temperature?: number;
+      max_output_tokens?: number;
+      updated_at?: string;
+    } | undefined;
+
+    return {
+      provider: row?.provider === 'openai' ? 'openai' : row?.provider === 'gemini' ? 'gemini' : DEFAULT_LLM_SETTINGS.provider,
+      model: (row?.model || '').trim() || DEFAULT_LLM_SETTINGS.model,
+      temperature: typeof row?.temperature === 'number' ? row.temperature : DEFAULT_LLM_SETTINGS.temperature,
+      maxOutputTokens: typeof row?.max_output_tokens === 'number' ? row.max_output_tokens : DEFAULT_LLM_SETTINGS.maxOutputTokens,
+      updatedAt: row?.updated_at,
+    };
+  },
+
+  saveLlmSettings: (settings: Partial<DbLlmSettings>, profileId?: number): DbLlmSettings => {
+    const db = getDb();
+    const normalizedProfileId = profileId && profileId > 0 ? profileId : 0;
+    const current = repo.getLlmSettings(normalizedProfileId);
+
+    const provider = settings.provider === 'openai' || settings.provider === 'gemini'
+      ? settings.provider
+      : current.provider;
+    const model = (settings.model || '').trim() || current.model;
+    const temperature = typeof settings.temperature === 'number' && Number.isFinite(settings.temperature)
+      ? settings.temperature
+      : current.temperature;
+    const maxOutputTokens = typeof settings.maxOutputTokens === 'number' && Number.isFinite(settings.maxOutputTokens)
+      ? Math.max(1, Math.floor(settings.maxOutputTokens))
+      : current.maxOutputTokens;
+    const updatedAt = new Date().toISOString();
+
+    db.prepare(`
+      INSERT INTO llm_settings (profile_id, provider, model, temperature, max_output_tokens, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?)
+      ON CONFLICT(profile_id) DO UPDATE SET
+        provider = excluded.provider,
+        model = excluded.model,
+        temperature = excluded.temperature,
+        max_output_tokens = excluded.max_output_tokens,
+        updated_at = excluded.updated_at
+    `).run(normalizedProfileId, provider, model, temperature, maxOutputTokens, updatedAt);
+
+    return {
+      provider,
+      model,
+      temperature,
+      maxOutputTokens,
+      updatedAt,
+    };
   },
 
   // --- Maintenance ---

@@ -57,7 +57,9 @@ declare global {
         history: () => Promise<ExportRecord[]>;
       };
       llm: {
-        ask: (question: string) => Promise<ChatMessage>;
+        ask: (payload: string | { question: string; provider?: 'openai' | 'gemini'; model?: string; temperature?: number; maxOutputTokens?: number; profileId?: number }) => Promise<ChatMessage>;
+        getSettings: (profileId?: number) => Promise<{ provider: 'openai' | 'gemini'; model: string; temperature: number; maxOutputTokens: number; updatedAt?: string }>;
+        saveSettings: (payload: { provider?: 'openai' | 'gemini'; model?: string; temperature?: number; maxOutputTokens?: number; profileId?: number }) => Promise<{ provider: 'openai' | 'gemini'; model: string; temperature: number; maxOutputTokens: number; updatedAt?: string }>;
       };
       recovery: {
         run: (action: 'vacuum' | 'reindex' | 'reset_cache') => Promise<boolean>;

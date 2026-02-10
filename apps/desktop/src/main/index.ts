@@ -26,6 +26,39 @@ let authManager: AuthManager | null = null;
 let syncOrchestrator: SyncOrchestrator | null = null;
 let llmOrchestrator: LLMOrchestrator | null = null;
 
+type LlmRequestPayload = {
+  question: string;
+  provider?: 'openai' | 'gemini';
+  model?: string;
+  temperature?: number;
+  maxOutputTokens?: number;
+  profileId?: number;
+};
+
+const normalizeLlmRequest = (payload: unknown): LlmRequestPayload => {
+  if (typeof payload === 'string') {
+    return { question: payload };
+  }
+
+  if (!payload || typeof payload !== 'object') {
+    throw new AppError('VALIDATION_ERROR', 'Invalid question payload');
+  }
+
+  const request = payload as Record<string, unknown>;
+  if (typeof request.question !== 'string') {
+    throw new AppError('VALIDATION_ERROR', 'Invalid question payload');
+  }
+
+  return {
+    question: request.question,
+    provider: request.provider === 'openai' || request.provider === 'gemini' ? request.provider : undefined,
+    model: typeof request.model === 'string' ? request.model : undefined,
+    temperature: typeof request.temperature === 'number' ? request.temperature : undefined,
+    maxOutputTokens: typeof request.maxOutputTokens === 'number' ? request.maxOutputTokens : undefined,
+    profileId: typeof request.profileId === 'number' ? request.profileId : undefined,
+  };
+};
+
 async function createWindow() {
   win = new BrowserWindow({
     title: 'InsightEngine Desktop',
@@ -110,11 +143,9 @@ app.whenReady().then(() => {
 
     const openAiKey = process.env.OPENAI_API_KEY;
     const geminiKey = process.env.GEMINI_API_KEY;
-    const llmProvider = openAiKey
-      ? new OpenAIProvider(openAiKey)
-      : geminiKey
-        ? new GeminiProvider(geminiKey)
-        : new LocalStubProvider();
+    const openAiProvider = openAiKey ? new OpenAIProvider(openAiKey) : null;
+    const geminiProvider = geminiKey ? new GeminiProvider(geminiKey) : null;
+    const fallbackProvider = new LocalStubProvider();
     const llmProviderName = openAiKey ? 'openai' : 'gemini';
     const llmModel = openAiKey
       ? (process.env.OPENAI_MODEL || 'gpt-4o-mini')
@@ -122,8 +153,8 @@ app.whenReady().then(() => {
     const dataExecutor = new CoreDataExecutor();
     llmOrchestrator = new LLMOrchestrator(
       new ProviderRegistry({
-        openai: llmProvider,
-        gemini: llmProvider,
+        openai: openAiProvider || fallbackProvider,
+        gemini: geminiProvider || fallbackProvider,
       }),
       dataExecutor,
       {
@@ -305,10 +336,45 @@ app.whenReady().then(() => {
     });
     handle('export:history', async () => repo.getExportHistory());
 
-    handle('llm:ask', async (_event, question) => {
+    handle('llm:settings:get', async (_event, profileId) => {
+      const normalizedProfileId = typeof profileId === 'number' ? profileId : undefined;
+      return repo.getLlmSettings(normalizedProfileId);
+    });
+
+    handle('llm:settings:save', async (_event, payload) => {
+      if (!payload || typeof payload !== 'object') throw new AppError('VALIDATION_ERROR', 'Invalid settings payload');
+      const request = payload as Record<string, unknown>;
+      const settings = {
+        provider: request.provider === 'openai' || request.provider === 'gemini' ? request.provider : undefined,
+        model: typeof request.model === 'string' ? request.model : undefined,
+        temperature: typeof request.temperature === 'number' ? request.temperature : undefined,
+        maxOutputTokens: typeof request.maxOutputTokens === 'number' ? request.maxOutputTokens : undefined,
+      };
+      const profileId = typeof request.profileId === 'number' ? request.profileId : undefined;
+      return repo.saveLlmSettings(settings, profileId);
+    });
+
+    handle('llm:ask', async (_event, payload) => {
       if (!llmOrchestrator) throw new AppError('UNKNOWN_ERROR', 'LLM not initialized');
-      if (typeof question !== 'string' || question.length > 500) throw new AppError('VALIDATION_ERROR', "Invalid question");
-      return await llmOrchestrator.processMessage(question);
+      const request = normalizeLlmRequest(payload);
+      if (!request.question || request.question.length > 500) throw new AppError('VALIDATION_ERROR', "Invalid question");
+
+      const savedSettings = repo.getLlmSettings(request.profileId);
+      const provider = request.provider || savedSettings.provider;
+      const model = (request.model || '').trim() || savedSettings.model;
+      const plannerModel = model;
+      const summarizerModel = model;
+
+      const runtimeOrchestrator = new LLMOrchestrator(
+        new ProviderRegistry({
+          openai: openAiProvider || fallbackProvider,
+          gemini: geminiProvider || fallbackProvider,
+        }),
+        new CoreDataExecutor(),
+        { provider, plannerModel, summarizerModel }
+      );
+
+      return await runtimeOrchestrator.processMessage(request.question);
     });
 
     handle('recovery:run', async (_event, action) => {
