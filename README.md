@@ -8,7 +8,189 @@ A local-first, deterministic reporting tool for YouTube Analytics.
 - **Portable**: No installation required.
 - **Privacy**: Tokens stored locally (encrypted).
 
-## Development
+## Instalacja i uruchomienie (dla początkujących)
+
+Poniżej masz instrukcję "krok po kroku" tak, żeby aplikacja uruchomiła się bez problemu.
+
+---
+
+### 1) Zainstaluj wymagane narzędzia
+
+Potrzebujesz:
+- **Node.js 18+** (najlepiej wersja LTS 20)
+- **pnpm**
+- (opcjonalnie) **Git**
+
+#### Windows
+1. Wejdź na: https://nodejs.org
+2. Pobierz wersję **LTS** i zainstaluj (klikaj "Next").
+3. Otwórz **PowerShell** i wpisz:
+   ```bash
+   node -v
+   npm -v
+   ```
+4. Zainstaluj pnpm:
+   ```bash
+   npm install -g pnpm
+   ```
+5. Sprawdź:
+   ```bash
+   pnpm -v
+   ```
+
+#### macOS
+1. Zainstaluj Node.js LTS ze strony https://nodejs.org (lub przez Homebrew).
+2. W Terminalu sprawdź:
+   ```bash
+   node -v
+   npm -v
+   ```
+3. Zainstaluj pnpm:
+   ```bash
+   npm install -g pnpm
+   pnpm -v
+   ```
+
+#### Linux
+1. Zainstaluj Node.js 18+ (najlepiej 20 LTS) przez menedżer pakietów lub NodeSource.
+2. Sprawdź:
+   ```bash
+   node -v
+   npm -v
+   ```
+3. Zainstaluj pnpm:
+   ```bash
+   npm install -g pnpm
+   pnpm -v
+   ```
+
+---
+
+### 2) Pobierz projekt
+
+Jeśli masz Git:
+```bash
+git clone <TU_WKLEJ_LINK_DO_REPOZYTORIUM>
+cd yt-app
+```
+
+Jeśli nie masz Git:
+1. Pobierz ZIP z GitHub (Code -> Download ZIP).
+2. Rozpakuj.
+3. Otwórz terminal w folderze projektu `yt-app`.
+
+---
+
+### 3) Zainstaluj zależności
+
+W folderze projektu uruchom:
+```bash
+pnpm install
+```
+
+To może potrwać kilka minut.
+
+---
+
+### 4) Skonfiguruj plik `.env.local`
+
+W głównym katalogu projektu utwórz plik **`.env.local`**.
+
+Najprościej:
+1. Skopiuj plik `.env.example`.
+2. Zmień nazwę kopii na `.env.local`.
+
+W pliku ustaw minimum:
+```env
+GOOGLE_CLOUD_PROJECT=twoj-project-id
+GOOGLE_CLOUD_LOCATION=us-central1
+```
+
+Dodatkowo (opcjonalnie):
+```env
+API_BACKEND_PORT=5000
+API_BACKEND_HOST=127.0.0.1
+API_PAYLOAD_MAX_SIZE=7mb
+```
+
+> Uwaga: bez `GOOGLE_CLOUD_PROJECT` i `GOOGLE_CLOUD_LOCATION` backend się nie uruchomi.
+
+---
+
+### 5) Skonfiguruj autoryzację Google Cloud (tryb real)
+
+Jeśli chcesz działać na prawdziwym API Google:
+
+1. Zainstaluj Google Cloud CLI (gcloud):  
+   https://cloud.google.com/sdk/docs/install
+2. Zaloguj się:
+   ```bash
+   gcloud auth application-default login
+   ```
+3. Wybierz konto i zaakceptuj w przeglądarce.
+
+---
+
+### 6) Uruchom aplikację
+
+W katalogu projektu:
+
+- Start normalny:
+  ```bash
+  pnpm start
+  ```
+
+- Tryb developerski (auto-restart po zmianach):
+  ```bash
+  pnpm dev
+  ```
+
+Po poprawnym starcie zobaczysz komunikat podobny do:
+```text
+Vertex AI Backend listening at http://localhost:5000
+```
+
+---
+
+### 7) Jak sprawdzić, czy działa
+
+W drugim terminalu możesz sprawdzić, czy port działa:
+```bash
+curl http://127.0.0.1:5000
+```
+
+Jeśli endpoint główny nie istnieje, to i tak ważne jest, że proces serwera działa i nie kończy się błędem.
+
+---
+
+## Najczęstsze problemy i szybkie rozwiązania
+
+### Problem: `pnpm: command not found`
+Rozwiązanie: doinstaluj pnpm:
+```bash
+npm install -g pnpm
+```
+
+### Problem: `GOOGLE_CLOUD_PROJECT and GOOGLE_CLOUD_LOCATION must be set`
+Rozwiązanie: uzupełnij `.env.local` o te dwie zmienne.
+
+### Problem: `Could not load the default credentials`
+Rozwiązanie: zaloguj ADC:
+```bash
+gcloud auth application-default login
+```
+
+### Problem: `403` przy `pnpm install`
+To zwykle problem sieci/proxy/rejestru npm. Spróbuj:
+```bash
+pnpm config get registry
+pnpm config set registry https://registry.npmjs.org/
+pnpm install
+```
+
+---
+
+## Development (skrót)
 
 ### Prerequisites
 - Node.js 18+
