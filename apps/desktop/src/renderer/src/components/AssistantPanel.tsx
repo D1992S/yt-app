@@ -5,9 +5,15 @@ import { ChatMessage } from '@insight/shared';
 interface AssistantPanelProps {
   isOpen: boolean;
   onClose: () => void;
+  llmSettings?: {
+    provider?: 'openai' | 'gemini';
+    model?: string;
+    temperature?: number;
+    maxOutputTokens?: number;
+  };
 }
 
-export const AssistantPanel: React.FC<AssistantPanelProps> = ({ isOpen, onClose }) => {
+export const AssistantPanel: React.FC<AssistantPanelProps> = ({ isOpen, onClose, llmSettings }) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -34,7 +40,13 @@ export const AssistantPanel: React.FC<AssistantPanelProps> = ({ isOpen, onClose 
     setLoading(true);
 
     try {
-      const response = await window.electron.llm.ask(userMsg.content);
+      const response = await window.electron.llm.generate({
+        question: userMsg.content,
+        provider: llmSettings?.provider,
+        model: llmSettings?.model,
+        temperature: llmSettings?.temperature,
+        maxOutputTokens: llmSettings?.maxOutputTokens,
+      });
       setMessages(prev => [...prev, response]);
     } catch (err) {
       setMessages(prev => [...prev, {

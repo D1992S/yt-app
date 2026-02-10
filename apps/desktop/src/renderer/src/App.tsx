@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { AppState, ReportMode, SafeModeError, ReportData } from '@insight/shared';
-import { Activity, Play, Download, BarChart, MessageSquare, Loader2 } from 'lucide-react';
+import { Activity, Play, BarChart, MessageSquare, Loader2 } from 'lucide-react';
 import { AuthStatus } from './components/AuthStatus';
 import { ProgressBar } from './components/ProgressBar';
 import { Diagnostics } from './components/Diagnostics';
@@ -22,9 +22,17 @@ import { ProfileSwitcher } from './components/ProfileSwitcher';
 import { DateSelector } from './components/DateSelector';
 import { ReportConfig } from './components/ReportConfig';
 import { ReportView } from './components/ReportView';
+import { LlmSettingsPanel, LlmSettingsFormState } from './components/LlmSettingsPanel';
 import { Button, Card } from './components/ui/DesignSystem';
 import { calculateMetrics } from '@insight/core';
 import { generateInsights } from '@insight/llm';
+
+const DEFAULT_LLM_SETTINGS: LlmSettingsFormState = {
+  provider: 'gemini',
+  model: 'gemini-2.5-flash',
+  temperature: 0.3,
+  maxOutputTokens: 1024,
+};
 
 const App: React.FC = () => {
   const [state, setState] = useState<AppState>({
@@ -45,6 +53,11 @@ const App: React.FC = () => {
   const [showDiagnostics, setShowDiagnostics] = useState(false);
   const [showAssistant, setShowAssistant] = useState(false);
   const [user, setUser] = useState<any>(undefined);
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'settings'>('dashboard');
+  const [llmSettings, setLlmSettings] = useState<LlmSettingsFormState>(DEFAULT_LLM_SETTINGS);
+  const [isLlmSettingsLoading, setIsLlmSettingsLoading] = useState(true);
+  const [isLlmSettingsSaving, setIsLlmSettingsSaving] = useState(false);
+  const [llmSettingsError, setLlmSettingsError] = useState<string | undefined>(undefined);
 
   // Helper to parse error from IPC
   const parseError = (e: any): SafeModeError | string => {
@@ -75,14 +88,24 @@ const App: React.FC = () => {
   useEffect(() => {
     const init = async () => {
       try {
-        const [pingRes, pathsRes, userRes] = await Promise.all([
+        const [pingRes, pathsRes, userRes, savedLlmSettings] = await Promise.all([
           window.electron.ping(),
           window.electron.getPaths(),
-          window.electron.auth.getStatus()
+          window.electron.auth.getStatus(),
+          window.electron.llm.getSettings(),
         ]);
         setUser(userRes || undefined);
+        setLlmSettings({
+          provider: savedLlmSettings.provider,
+          model: savedLlmSettings.model,
+          temperature: savedLlmSettings.temperature,
+          maxOutputTokens: savedLlmSettings.maxOutputTokens,
+        });
       } catch (e) {
         console.error("Init failed", e);
+        setLlmSettingsError('Nie udało się pobrać ustawień LLM.');
+      } finally {
+        setIsLlmSettingsLoading(false);
       }
     };
     init();
@@ -96,6 +119,30 @@ const App: React.FC = () => {
 
     return cleanup;
   }, []);
+
+  useEffect(() => {
+    if (isLlmSettingsLoading) return;
+
+    const timeoutId = window.setTimeout(async () => {
+      try {
+        setIsLlmSettingsSaving(true);
+        setLlmSettingsError(undefined);
+        await window.electron.llm.saveSettings({
+          provider: llmSettings.provider,
+          model: llmSettings.model,
+          temperature: llmSettings.temperature,
+          maxOutputTokens: llmSettings.maxOutputTokens,
+        });
+      } catch (error) {
+        console.error('Saving LLM settings failed', error);
+        setLlmSettingsError('Nie udało się zapisać ustawień LLM.');
+      } finally {
+        setIsLlmSettingsSaving(false);
+      }
+    }, 500);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [llmSettings, isLlmSettingsLoading]);
 
   const handleConnect = async () => {
     setAuthLoading(true);
@@ -179,7 +226,11 @@ const App: React.FC = () => {
   return (
     <div className="min-h-screen bg-bg text-text flex flex-col font-sans selection:bg-accent selection:text-white">
       <Diagnostics isOpen={showDiagnostics} onClose={() => setShowDiagnostics(false)} />
-      <AssistantPanel isOpen={showAssistant} onClose={() => setShowAssistant(false)} />
+      <AssistantPanel
+        isOpen={showAssistant}
+        onClose={() => setShowAssistant(false)}
+        llmSettings={llmSettings}
+      />
       
       {state.safeModeError && (
         <SafeMode 
@@ -228,6 +279,22 @@ const App: React.FC = () => {
       </header>
 
       <main className="flex-1 w-full max-w-[1400px] mx-auto p-4 md:p-6 lg:p-8 grid gap-6">
+        <section className="flex items-center gap-2">
+          <Button
+            variant={activeTab === 'dashboard' ? 'primary' : 'outline'}
+            onClick={() => setActiveTab('dashboard')}
+          >
+            Dashboard
+          </Button>
+          <Button
+            variant={activeTab === 'settings' ? 'primary' : 'outline'}
+            onClick={() => setActiveTab('settings')}
+          >
+            Settings
+          </Button>
+        </section>
+        {activeTab === 'dashboard' && (
+        <>
         <section className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           <div className="lg:col-span-8 space-y-4">
             <DateSelector 
@@ -304,6 +371,20 @@ const App: React.FC = () => {
               <CsvImporter />
             </div>
           </div>
+        )}
+        </>
+        )}
+
+        {activeTab === 'settings' && (
+          <section className="grid grid-cols-1 gap-6">
+            <LlmSettingsPanel
+              settings={llmSettings}
+              isLoading={isLlmSettingsLoading}
+              isSaving={isLlmSettingsSaving}
+              error={llmSettingsError}
+              onChange={setLlmSettings}
+            />
+          </section>
         )}
       </main>
 
