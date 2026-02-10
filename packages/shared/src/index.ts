@@ -158,6 +158,19 @@ export interface QueryPlan {
   limit?: number;
 }
 
+// --- Report ---
+
+export interface ReportData {
+  id: string;
+  generatedAt: string;
+  range: Range;
+  mode: ReportMode;
+  metrics: MetricResult;
+  timeSeries: DataPoint[];
+  insights?: string;
+  isOffline: boolean;
+}
+
 // --- Safe Mode ---
 
 export interface SafeModeError {

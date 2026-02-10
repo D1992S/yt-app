@@ -5,11 +5,11 @@ import { repo, calculateMetrics, perf } from '@insight/core';
 import { generateHtmlReport, detectAnomalies } from '@insight/reports';
 import { ReportData, Range, ReportMode, formatDateISO, getPreviousPeriod } from '@insight/shared';
 import { getAppPaths } from './fs-utils';
-import { GuardedLLMProvider } from '@insight/core/dist/llm/guard'; 
-import { GoogleGenAIProvider, LocalStubProvider, EXECUTIVE_BRIEF_PROMPT } from '@insight/llm';
+import { GuardedLLMProvider } from '@insight/core';
+import { GeminiProvider, LocalStubProvider, EXECUTIVE_BRIEF_PROMPT } from '@insight/llm';
 
 const apiKey = process.env.API_KEY;
-const baseProvider = apiKey ? new GoogleGenAIProvider(apiKey) : new LocalStubProvider();
+const baseProvider = apiKey ? new GeminiProvider(apiKey) : new LocalStubProvider();
 const llm = new GuardedLLMProvider(baseProvider);
 
 export const generateReport = async (range: Range, mode: ReportMode): Promise<string> => {
