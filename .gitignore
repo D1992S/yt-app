@@ -3,9 +3,12 @@ node_modules/
 
 # Build output
 dist/
+dist-electron/
 out/
-build/
 *.tsbuildinfo
+
+# Keep desktop app build resources (icons etc.)
+# build/ is NOT ignored - apps/desktop/build/ contains icon assets
 
 # Environment files
 .env
