@@ -5,6 +5,10 @@
   "version": "0.0.0",
   "description": "Node backend for proxying Google Cloud API requests",
   "main": "server.js",
+  "engines": {
+    "node": ">=18.0.0",
+    "pnpm": ">=9.0.0"
+  },
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js",

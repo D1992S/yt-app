@@ -14,9 +14,6 @@ importers:
       express:
         specifier: ^5.2.1
         version: 5.2.1
-      google-auth-library:
-        specifier: ^10.5.0
-        version: 10.5.0
     devDependencies:
       '@testing-library/jest-dom':
         specifier: ^6.9.1
@@ -75,6 +72,9 @@ importers:
 
   apps/desktop:
     dependencies:
+      '@insight/core':
+        specifier: workspace:*
+        version: link:../../packages/core
       '@insight/shared':
         specifier: workspace:*
         version: link:../../packages/shared
@@ -168,6 +168,9 @@ importers:
       '@insight/shared':
         specifier: workspace:*
         version: link:../shared
+      openai:
+        specifier: ^5.12.2
+        version: 5.23.2(ws@8.19.0)(zod@3.25.76)
     devDependencies:
       '@types/node':
         specifier: ^20.11.0
@@ -2384,6 +2387,18 @@ packages:
 
   once@1.4.0:
     resolution: {integrity: sha512-lNaJgI+2Q5URQBkccEKHTQOPaXdUxnZZElQTZY0MFUAuaEqe1E+Nyvgdz/aIyNi6Z9MzO5dv1H8n58/GELp3+w==}
+
+  openai@5.23.2:
+    resolution: {integrity: sha512-MQBzmTulj+MM5O8SKEk/gL8a7s5mktS9zUtAkU257WjvobGc9nKcBuVwjyEEcb9SI8a8Y2G/mzn3vm9n1Jlleg==}
+    hasBin: true
+    peerDependencies:
+      ws: ^8.18.0
+      zod: ^3.23.8
+    peerDependenciesMeta:
+      ws:
+        optional: true
+      zod:
+        optional: true
 
   p-cancelable@2.1.1:
     resolution: {integrity: sha512-BZOr3nRQHOntUjTrH8+Lh54smKHoHyur8We1V8DSMVrl5A2malOOwuJRnKRDjSnkoeBh4at6BwEnb5I7Jl31wg==}
@@ -5427,6 +5442,11 @@ snapshots:
   once@1.4.0:
     dependencies:
       wrappy: 1.0.2
+
+  openai@5.23.2(ws@8.19.0)(zod@3.25.76):
+    optionalDependencies:
+      ws: 8.19.0
+      zod: 3.25.76
 
   p-cancelable@2.1.1: {}
 
