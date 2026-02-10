@@ -10,23 +10,37 @@ interface ReportConfigProps {
   disabled?: boolean;
 }
 
-const ICONS = {
-  FAST: Zap,
-  STANDARD: FileText,
-  MAX: BarChart2,
+const ICONS: Record<string, typeof Zap> = {
+  quick: Zap,
+  standard: FileText,
+  max: BarChart2,
 };
 
 export const ReportConfig: React.FC<ReportConfigProps> = ({ mode, onChange, disabled }) => {
   return (
-    <div className="flex flex-col gap-2 p-4 bg-white rounded-lg shadow-sm border border-slate-200">
-      <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Tryb Raportu</label>
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+    <fieldset
+      className="flex flex-col gap-2 p-4 bg-white rounded-lg shadow-sm border border-slate-200"
+      disabled={disabled}
+      aria-label="Konfiguracja trybu raportu"
+    >
+      <legend className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+        Tryb Raportu
+      </legend>
+      <div
+        className="grid grid-cols-1 sm:grid-cols-3 gap-3"
+        role="radiogroup"
+        aria-label="Wybierz tryb raportu"
+      >
         {REPORT_MODES.map((m) => {
           const Icon = ICONS[m.mode];
           const isSelected = mode === m.mode;
           return (
             <button
               key={m.mode}
+              type="button"
+              role="radio"
+              aria-checked={isSelected}
+              aria-label={`${m.label}: ${m.description}`}
               disabled={disabled}
               onClick={() => onChange(m.mode)}
               className={clsx(
@@ -38,7 +52,7 @@ export const ReportConfig: React.FC<ReportConfigProps> = ({ mode, onChange, disa
               )}
             >
               <div className="flex items-center gap-2 mb-1">
-                <Icon size={16} className={isSelected ? "text-blue-600" : "text-slate-500"} />
+                <Icon size={16} aria-hidden="true" className={isSelected ? "text-blue-600" : "text-slate-500"} />
                 <span className={clsx("font-semibold text-sm", isSelected ? "text-blue-900" : "text-slate-700")}>
                   {m.label}
                 </span>
@@ -48,6 +62,6 @@ export const ReportConfig: React.FC<ReportConfigProps> = ({ mode, onChange, disa
           );
         })}
       </div>
-    </div>
+    </fieldset>
   );
 };

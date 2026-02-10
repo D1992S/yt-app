@@ -26,23 +26,27 @@ export class ErrorBoundary extends Component<Props, State> {
   render() {
     if (this.state.hasError) {
       return (
-        <div style={{ padding: '2rem', fontFamily: 'system-ui, sans-serif' }}>
+        <div role="alert" aria-live="assertive" style={{ padding: '2rem', fontFamily: 'system-ui, sans-serif' }}>
           <h1 style={{ color: '#dc2626', fontSize: '1.5rem', marginBottom: '0.5rem' }}>
             Wystąpił nieoczekiwany błąd
           </h1>
-          <pre style={{
-            background: '#fef2f2',
-            border: '1px solid #fecaca',
-            borderRadius: '8px',
-            padding: '1rem',
-            overflow: 'auto',
-            fontSize: '0.875rem',
-            color: '#991b1b',
-          }}>
+          <pre
+            aria-label="Szczegóły błędu"
+            style={{
+              background: '#fef2f2',
+              border: '1px solid #fecaca',
+              borderRadius: '8px',
+              padding: '1rem',
+              overflow: 'auto',
+              fontSize: '0.875rem',
+              color: '#991b1b',
+            }}
+          >
             {this.state.error?.message}
           </pre>
           <button
             onClick={() => this.setState({ hasError: false, error: null })}
+            aria-label="Spróbuj ponownie załadować aplikację"
             style={{
               marginTop: '1rem',
               padding: '0.5rem 1rem',

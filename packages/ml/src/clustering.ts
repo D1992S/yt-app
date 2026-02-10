@@ -58,10 +58,9 @@ export class TextClusterer {
     if (vectors.length < k) k = vectors.length;
 
     const dim = vectors[0].values.length;
-    
-    // Initialize Centroids: Shuffle and pick first k (Deterministic with SeededRNG)
-    const shuffled = this.rng.shuffle(vectors);
-    let centroids = shuffled.slice(0, k).map(v => [...v.values]);
+
+    // Initialize Centroids: K-Means++ (Deterministic with SeededRNG)
+    let centroids = this.kMeansPlusPlusInit(vectors, k);
     let assignments = new Array(vectors.length).fill(-1);
 
     for (let iter = 0; iter < maxIterations; iter++) {
@@ -108,6 +107,52 @@ export class TextClusterer {
       videoId: vectors[idx].id,
       clusterId
     }));
+  }
+
+  private kMeansPlusPlusInit(vectors: Vector[], k: number): number[][] {
+    const centroids: number[][] = [];
+
+    // 1. Pick first centroid uniformly at random
+    const firstIdx = Math.floor(this.rng.next() * vectors.length);
+    centroids.push([...vectors[firstIdx].values]);
+
+    // 2. For each subsequent centroid, pick proportional to D(x)^2
+    for (let c = 1; c < k; c++) {
+      // Compute squared distance from each point to its nearest existing centroid
+      const distances: number[] = vectors.map(vec => {
+        let minDist = Infinity;
+        for (const centroid of centroids) {
+          const dist = this.euclideanDistance(vec.values, centroid);
+          if (dist < minDist) minDist = dist;
+        }
+        return minDist * minDist; // squared distance
+      });
+
+      // Build cumulative distribution
+      const totalDist = distances.reduce((a, b) => a + b, 0);
+      if (totalDist === 0) {
+        // All points are identical to existing centroids; pick randomly
+        const idx = Math.floor(this.rng.next() * vectors.length);
+        centroids.push([...vectors[idx].values]);
+        continue;
+      }
+
+      const threshold = this.rng.next() * totalDist;
+      let cumulative = 0;
+      let selectedIdx = 0;
+
+      for (let i = 0; i < distances.length; i++) {
+        cumulative += distances[i];
+        if (cumulative >= threshold) {
+          selectedIdx = i;
+          break;
+        }
+      }
+
+      centroids.push([...vectors[selectedIdx].values]);
+    }
+
+    return centroids;
   }
 
   private euclideanDistance(a: number[], b: number[]): number {
