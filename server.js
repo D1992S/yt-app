@@ -12,6 +12,15 @@ import fetch from 'node-fetch';
 const app = express();
 app.use(express.json({limit: process?.env?.API_PAYLOAD_MAX_SIZE || "7mb"}));
 
+// CORS: only allow requests from the local Electron app
+app.use((req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', 'http://localhost:5173');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-app-proxy');
+  if (req.method === 'OPTIONS') return res.sendStatus(204);
+  next();
+});
+
 const PORT = process?.env?.API_BACKEND_PORT || 5000;
 const API_BACKEND_HOST = process?.env?.API_BACKEND_HOST || "127.0.0.1";
 const GOOGLE_CLOUD_LOCATION = process?.env?.GOOGLE_CLOUD_LOCATION;
@@ -279,7 +288,7 @@ app.post('/api-proxy', async (req, res) => {
   } catch (error) {
     console.error(`[Node Proxy] Error proxying request for ${apiClient.name}`);
     console.error(error)
-    res.status(500).json({ error: error });
+    res.status(500).json({ error: error instanceof Error ? error.message : 'Internal proxy error' });
   }
 });
 
