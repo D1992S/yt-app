@@ -2,6 +2,8 @@
 
 A local-first, deterministic reporting tool for YouTube Analytics.
 
+> **Nie wiesz jak zacząć?** Przeczytaj **[INSTRUKCJA.md](INSTRUKCJA.md)** — szczegółowy poradnik krok po kroku po polsku, napisany dla osób bez doświadczenia z programowaniem.
+
 ## Features
 - **Local Database**: SQLite storage for all metrics.
 - **Offline Ready**: Works without internet after data sync.
