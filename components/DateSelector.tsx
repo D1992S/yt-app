@@ -24,12 +24,22 @@ export const DateSelector: React.FC<DateSelectorProps> = ({ value, onChange, dis
   };
 
   return (
-    <div className="flex flex-col gap-2 p-4 bg-white rounded-lg shadow-sm border border-slate-200">
-      <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Zakres Danych</label>
-      <div className="flex flex-wrap gap-2">
+    <fieldset
+      className="flex flex-col gap-2 p-4 bg-white rounded-lg shadow-sm border border-slate-200"
+      disabled={disabled}
+      aria-label="Wybór zakresu danych"
+    >
+      <legend className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+        Zakres Danych
+      </legend>
+      <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Predefiniowane zakresy dat">
         {PRESETS.map((p) => (
           <button
             key={p.id}
+            type="button"
+            role="radio"
+            aria-checked={value.preset === p.id}
+            aria-label={`Zakres ${p.label}`}
             disabled={disabled}
             onClick={() => handlePresetClick(p.id, p.days)}
             className={clsx(
@@ -44,15 +54,20 @@ export const DateSelector: React.FC<DateSelectorProps> = ({ value, onChange, dis
           </button>
         ))}
       </div>
-      <div className="flex items-center gap-2 mt-2 text-sm text-slate-600">
+      <div
+        className="flex items-center gap-2 mt-2 text-sm text-slate-600"
+        aria-live="polite"
+        aria-atomic="true"
+      >
         <span className="font-mono bg-slate-50 px-2 py-1 rounded border border-slate-200">
-          {value.start.toLocaleDateString()}
+          <time dateTime={value.start.toISOString()}>{value.start.toLocaleDateString()}</time>
         </span>
-        <span>➔</span>
+        <span aria-hidden="true">➔</span>
+        <span className="sr-only">do</span>
         <span className="font-mono bg-slate-50 px-2 py-1 rounded border border-slate-200">
-          {value.end.toLocaleDateString()}
+          <time dateTime={value.end.toISOString()}>{value.end.toLocaleDateString()}</time>
         </span>
       </div>
-    </div>
+    </fieldset>
   );
 };

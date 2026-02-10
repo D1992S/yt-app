@@ -1,6 +1,6 @@
 export type DateRangePreset = '7d' | '28d' | '90d' | '365d' | 'custom';
 
-export type ReportMode = 'FAST' | 'STANDARD' | 'MAX';
+export type ReportMode = 'quick' | 'standard' | 'max';
 
 export interface DateRange {
   start: Date;

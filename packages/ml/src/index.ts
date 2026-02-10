@@ -5,4 +5,5 @@ export * from './metrics';
 export * from './forecasting';
 export * from './backtest';
 export * from './nowcast';
+export * from './anomaly';
 export * from './utils/random';

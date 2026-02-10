@@ -41,22 +41,10 @@ export const buildTrainingSet = (
     }
 
     // Feature Engineering
-    // 1. Duration (normalized roughly to minutes)
-    const featDuration = v.durationSec / 60;
-    
-    // 2. Title Length
-    const featTitleLen = v.title.length;
-    
-    // 3. Channel Momentum (normalized)
-    const featMomentum = v.channelSubscribersAtPublish > 0 
-      ? v.channelAvgViewsLast28d / v.channelSubscribersAtPublish 
-      : 0;
-
-    // 4. Publish Hour (Cyclical encoding could be better, using raw for V1)
-    const featHour = new Date(v.publishedAt).getHours();
+    const features = extractFeatures(v);
 
     dataset.push({
-      features: [featDuration, featTitleLen, featMomentum, featHour],
+      features,
       label: label,
       meta: { id: v.id, date: v.publishedAt }
     });
@@ -67,12 +55,57 @@ export const buildTrainingSet = (
 
 export const buildPredictionFeatures = (input: VideoInput): number[] => {
   // Must match buildTrainingSet logic exactly
-  const featDuration = input.durationSec / 60;
-  const featTitleLen = input.title.length;
-  const featMomentum = input.channelSubscribersAtPublish > 0 
-      ? input.channelAvgViewsLast28d / input.channelSubscribersAtPublish 
-      : 0;
-  const featHour = new Date(input.publishedAt).getHours();
-
-  return [featDuration, featTitleLen, featMomentum, featHour];
+  return extractFeatures(input);
 };
+
+// ---------- Shared feature extraction ----------
+
+function extractFeatures(v: VideoInput): number[] {
+  // 1. Duration (normalized roughly to minutes)
+  const featDuration = v.durationSec / 60;
+
+  // 2. Title Length
+  const featTitleLen = v.title.length;
+
+  // 3. Channel Momentum (normalized)
+  const featMomentum = v.channelSubscribersAtPublish > 0
+    ? v.channelAvgViewsLast28d / v.channelSubscribersAtPublish
+    : 0;
+
+  // 4. Cyclical hour encoding (replaces raw hour)
+  const hour = new Date(v.publishedAt).getHours();
+  const featHourSin = Math.sin((2 * Math.PI * hour) / 24);
+  const featHourCos = Math.cos((2 * Math.PI * hour) / 24);
+
+  // 5. Cyclical day-of-week encoding
+  const dow = new Date(v.publishedAt).getDay();
+  const featDowSin = Math.sin((2 * Math.PI * dow) / 7);
+  const featDowCos = Math.cos((2 * Math.PI * dow) / 7);
+
+  // 6. Title word count
+  const featWordCount = v.title.trim().split(/\s+/).filter(w => w.length > 0).length;
+
+  // 7. Has question mark
+  const featHasQuestion = v.title.includes('?') ? 1 : 0;
+
+  // 8. Has number
+  const featHasNumber = /\d/.test(v.title) ? 1 : 0;
+
+  // 9. Duration bucket: short (<5min)=0, medium (5-15min)=1, long (>15min)=2
+  const durationMin = v.durationSec / 60;
+  const featDurationBucket = durationMin < 5 ? 0 : durationMin <= 15 ? 1 : 2;
+
+  return [
+    featDuration,
+    featTitleLen,
+    featMomentum,
+    featHourSin,
+    featHourCos,
+    featDowSin,
+    featDowCos,
+    featWordCount,
+    featHasQuestion,
+    featHasNumber,
+    featDurationBucket,
+  ];
+}

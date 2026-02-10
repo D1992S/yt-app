@@ -39,8 +39,15 @@ export const runBacktest = (
     actVals.forEach((a, idx) => residuals.push(a - predVals[idx]));
   }
 
+  // Get model name safely — some forecast functions crash on empty input
+  let modelName = 'Unknown';
+  try {
+    const stub: TimeSeriesPoint[] = [{ date: '2000-01-01', value: 0 }];
+    modelName = forecastFn(stub, 1).modelName;
+  } catch { /* ignore */ }
+
   return {
-    modelName: forecastFn([], 1).modelName, // Hack to get name
+    modelName,
     smape: errorsSmape.length > 0 ? errorsSmape.reduce((a,b)=>a+b,0)/errorsSmape.length : 0,
     mae: errorsMae.length > 0 ? errorsMae.reduce((a,b)=>a+b,0)/errorsMae.length : 0,
     residuals
