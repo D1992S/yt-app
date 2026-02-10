@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { ReportData } from '../types';
 import {
   AreaChart,
@@ -11,12 +11,27 @@ import {
 } from 'recharts';
 import { Download, Printer } from 'lucide-react';
 
+function sanitizeHtml(html: string): string {
+  const div = document.createElement('div');
+  div.innerHTML = html;
+  div.querySelectorAll('script,iframe,object,embed,form,link,style').forEach(el => el.remove());
+  div.querySelectorAll('*').forEach(el => {
+    for (const attr of Array.from(el.attributes)) {
+      if (attr.name.startsWith('on') || attr.value.trim().toLowerCase().startsWith('javascript:')) {
+        el.removeAttribute(attr.name);
+      }
+    }
+  });
+  return div.innerHTML;
+}
+
 interface ReportViewProps {
   data: ReportData;
 }
 
 export const ReportView: React.FC<ReportViewProps> = ({ data }) => {
   const { metrics, timeSeries, insights, mode } = data;
+  const safeInsights = useMemo(() => sanitizeHtml(insights || 'Oczekiwanie na analizę...'), [insights]);
 
   return (
     <div className="bg-white rounded-xl shadow-lg border border-slate-200 overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -112,7 +127,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ data }) => {
             </div>
             <div 
               className="prose prose-sm prose-slate max-w-none bg-purple-50 p-4 rounded-lg border border-purple-100 text-slate-700"
-              dangerouslySetInnerHTML={{ __html: insights || 'Oczekiwanie na analizę...' }}
+              dangerouslySetInnerHTML={{ __html: safeInsights }}
             />
           </div>
         )}

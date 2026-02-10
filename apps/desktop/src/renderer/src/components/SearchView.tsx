@@ -2,6 +2,20 @@ import React, { useState } from 'react';
 import { Search, PlayCircle } from 'lucide-react';
 import { SearchResult } from '@insight/shared';
 
+function sanitizeHtml(html: string): string {
+  const div = document.createElement('div');
+  div.innerHTML = html;
+  div.querySelectorAll('script,iframe,object,embed,form,link,style').forEach(el => el.remove());
+  div.querySelectorAll('*').forEach(el => {
+    for (const attr of Array.from(el.attributes)) {
+      if (attr.name.startsWith('on') || attr.value.trim().toLowerCase().startsWith('javascript:')) {
+        el.removeAttribute(attr.name);
+      }
+    }
+  });
+  return div.innerHTML;
+}
+
 export const SearchView: React.FC = () => {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResult[]>([]);
@@ -57,7 +71,7 @@ export const SearchView: React.FC = () => {
             </div>
             <div 
               className="text-sm text-slate-600 mt-2"
-              dangerouslySetInnerHTML={{ __html: r.snippet }}
+              dangerouslySetInnerHTML={{ __html: sanitizeHtml(r.snippet) }}
             />
           </div>
         ))}
