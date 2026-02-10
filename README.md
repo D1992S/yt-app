@@ -102,8 +102,8 @@ Najprościej:
 
 W pliku ustaw minimum:
 ```env
-GOOGLE_CLOUD_PROJECT=twoj-project-id
-GOOGLE_CLOUD_LOCATION=us-central1
+OPENAI_API_KEY=...
+GEMINI_API_KEY=...
 ```
 
 Dodatkowo (opcjonalnie):
@@ -113,25 +113,7 @@ API_BACKEND_HOST=127.0.0.1
 API_PAYLOAD_MAX_SIZE=7mb
 ```
 
-> Uwaga: bez `GOOGLE_CLOUD_PROJECT` i `GOOGLE_CLOUD_LOCATION` backend się nie uruchomi.
-
----
-
-### 5) Skonfiguruj autoryzację Google Cloud (tryb real)
-
-Jeśli chcesz działać na prawdziwym API Google:
-
-1. Zainstaluj Google Cloud CLI (gcloud):  
-   https://cloud.google.com/sdk/docs/install
-2. Zaloguj się:
-   ```bash
-   gcloud auth application-default login
-   ```
-3. Wybierz konto i zaakceptuj w przeglądarce.
-
----
-
-### 6) Uruchom aplikację
+### 5) Uruchom aplikację
 
 W katalogu projektu:
 
@@ -145,14 +127,7 @@ W katalogu projektu:
   pnpm dev
   ```
 
-Po poprawnym starcie zobaczysz komunikat podobny do:
-```text
-Vertex AI Backend listening at http://localhost:5000
-```
-
----
-
-### 7) Jak sprawdzić, czy działa
+### 6) Jak sprawdzić, czy działa
 
 W drugim terminalu możesz sprawdzić, czy port działa:
 ```bash
@@ -171,14 +146,8 @@ Rozwiązanie: doinstaluj pnpm:
 npm install -g pnpm
 ```
 
-### Problem: `GOOGLE_CLOUD_PROJECT and GOOGLE_CLOUD_LOCATION must be set`
-Rozwiązanie: uzupełnij `.env.local` o te dwie zmienne.
-
-### Problem: `Could not load the default credentials`
-Rozwiązanie: zaloguj ADC:
-```bash
-gcloud auth application-default login
-```
+### Problem: brak odpowiedzi od modelu lub błąd autoryzacji LLM
+Rozwiązanie: upewnij się, że w `.env.local` masz poprawnie ustawione `OPENAI_API_KEY` i/lub `GEMINI_API_KEY`.
 
 ### Problem: `403` przy `pnpm install`
 To zwykle problem sieci/proxy/rejestru npm. Spróbuj:
@@ -224,6 +193,11 @@ Connects to YouTube API. Requires Google Cloud Console setup.
 ```bash
 APP_PROVIDER=real GOOGLE_CLIENT_ID=... GOOGLE_CLIENT_SECRET=... pnpm dev
 ```
+
+## Ustawienia providera/modelu w UI
+
+- W aplikacji możesz przełączać provider i model bez restartu.
+- Zmiany zapisują się lokalnie na urządzeniu, więc po ponownym uruchomieniu ustawienia pozostają takie same.
 
 ### Record Mode
 Proxies real requests and saves them as fixtures.
